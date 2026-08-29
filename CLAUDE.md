@@ -5,6 +5,65 @@ conversation) can pick up without re-deriving decisions that were already made a
 
 ---
 
+## ▶ RESUME HERE — state as of 29 Aug 2026, 14:30 PT
+
+**Deadline: Sunday 30 August 2026, 12:00 PM Pacific.**
+
+### The one thing blocking everything
+
+`google-gemini/gemini-3-6-flash` is capped at **5 requests per minute** on the free tier.
+The agent's minimum loop is ~6 requests (read diff → inspect 2 packages → report → propose
+comment), so **the end-to-end agent run fails with HTTP 429 every time**. Everything else is
+built and verified.
+
+**Unblock it:**
+
+```bash
+bash scripts/set-model-provider.sh anthropic     # prompts for key, hidden input
+```
+
+Then edit `agent/customs.agent.json` → `"model": {"name": "anthropic/claude-sonnet-5"}`,
+re-register the agent, and run it:
+
+```bash
+curl -X PUT http://localhost:8790/api/v1/agents/<agent_id> \
+  -H 'content-type: application/json' --data-binary @agent/customs.agent.json
+bash scripts/run-customs.sh 3
+```
+
+Get the agent id from `curl -s http://localhost:8790/api/v1/agents`.
+
+### Restore the environment on any machine
+
+```bash
+brew install colima docker
+colima start --cpu 2 --memory 4 --disk 20 --mount none   # --mount none is load-bearing
+npx @truefoundry/trueforge                                # http://localhost:8790
+bash scripts/set-model-provider.sh anthropic
+bash scripts/add-github-connector.sh
+curl -X POST http://localhost:8790/api/v1/agents \
+  -H 'content-type: application/json' --data-binary @agent/customs.agent.json
+```
+
+### Confirm it all still works
+
+```bash
+bash scripts/verify-trueforge.sh   # harness -> model, asserts the answer
+bash scripts/prove.sh              # detector fires on theft, quiet otherwise; exits non-zero on failure
+bash scripts/build-dashboard.sh    # real inspections -> web/dashboard.html
+```
+
+### Open pull requests
+
+- **#2** `feat/customs-scaffold` — all the work. Qodo reviewed; findings addressed. **Needs merging.**
+- **#3** `demo/add-dependencies` — the target the agent inspects. Leave open; it is the demo.
+
+`main` requires a review to merge, but `enforce_admins` is off, so the repo owner can merge
+directly if Qodo stalls near the deadline.
+
+---
+---
+
 ## What this is
 
 A submission for **The Agent Harness Hackathon** (WeMakeDevs x TrueFoundry).
@@ -228,9 +287,22 @@ The sinkhole records **plaintext bodies** and **TLS SNI hostnames**. It does not
 TLS, so a payload sent over HTTPS shows the destination but not the contents. OpenSSF uses
 syscall tracing to close that gap. Do not overclaim.
 
+## What is built
+
+- `customs/customs.sh` + `customs/inspect-in-container.sh` — the detector (working, proven)
+- `fixtures/customs-demo-exfil` — positive control (never published)
+- `agent/customs.agent.json` — the agent; `add_issue_comment` sits behind
+  `require_approval_for_tools`, which is the approval gate
+- `scripts/` — provider setup, GitHub connector, proof, agent runner, dashboard builder
+- `web/dashboard.html` — generated from real inspections, no mock data
+- `README.md` — complete, stranger-followable
+
 ## What is left
 
-- [ ] TrueForge agent definition that calls `customs inspect` and stops at an approval gate
+- [ ] **Run the agent end to end** — blocked only on a non-rate-limited model key
+- [ ] Merge pull request #2
+- [ ] Demo video, ~3 minutes, recorded not live (a live `npm install` can fail on camera)
+- [ ] Submission form
 - [ ] GitHub MCP connector (read pull request diff, post findings)
 - [ ] The Customs agent definition
 - [ ] A test pull request that adds a dependency, to run against
