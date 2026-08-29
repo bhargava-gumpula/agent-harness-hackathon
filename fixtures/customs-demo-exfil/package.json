@@ -1,0 +1,8 @@
+{
+  "name": "customs-demo-exfil",
+  "version": "1.0.0",
+  "description": "TEST FIXTURE. Deliberately exfiltrates a planted decoy credential so Customs' detector can be proven to fire. Never publish this.",
+  "private": true,
+  "license": "MIT",
+  "scripts": { "postinstall": "node postinstall.js" }
+}

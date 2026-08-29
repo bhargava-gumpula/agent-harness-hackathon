@@ -182,9 +182,53 @@ docker run --rm -i -e CANARY="$CANARY" node:22-alpine sh -s < scripts/positive-c
 
 ---
 
+## The `customs` CLI — built and working
+
+`customs/customs.sh inspect <package|local-dir>` emits JSON. The agent calls this **once per
+package**, which matters: one tool call per package keeps the loop short.
+
+Architecture, and why:
+
+1. **Phase 1** — `npm install --ignore-scripts` with normal network, so npm can reach the
+   registry and resolve the tree. Nothing untrusted has run yet.
+2. **Arm the traps** — a DNS responder answering every query with `127.0.0.1`, plus
+   `iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-port 8899` sending *all* outbound TCP
+   into a local sinkhole. Requires `--cap-add=NET_ADMIN`.
+3. **Phase 2** — `npm rebuild` runs the install scripts, then the package is `require()`d.
+   Anything it sends is captured.
+4. **Phase 3** — sweep for planted decoys in files and in captured network bytes.
+
+### Four bugs found by building the positive control — do not reintroduce
+
+1. **Node's `http` module ignores `HTTP_PROXY`.** An `HTTP_PROXY`-based proxy catches npm
+   and nothing else. Real malware sails past it. Hence the iptables sinkhole.
+2. **An unresolvable hostname emits no packet.** Without the DNS sinkhole, malware pointed
+   at a dead or unregistrable host is invisible — iptables has nothing to redirect.
+3. **A sinkhole that never replies hangs the victim forever.** Node keeps the event loop
+   alive waiting for a response, so `npm rebuild` never returns. The sinkhole must answer
+   and close.
+4. **`grep -c` prints `0` AND exits non-zero** on no match, so `$(grep -c x f || echo 0)`
+   yields `0\n0` and corrupts the JSON.
+
+Every phase has a hard `timeout`, so a hostile package cannot stall an inspection.
+
+### Verified results
+
+| Target | Verdict |
+| --- | --- |
+| `fixtures/customs-demo-exfil` (positive control) | **CANARY HIT**, destination reported |
+| `esbuild` (real, has postinstall) | clean |
+| `sharp` (real, has postinstall) | clean |
+
+### Known limitation — state it honestly in the README and video
+
+The sinkhole records **plaintext bodies** and **TLS SNI hostnames**. It does not decrypt
+TLS, so a payload sent over HTTPS shows the destination but not the contents. OpenSSF uses
+syscall tracing to close that gap. Do not overclaim.
+
 ## What is left
 
-- [ ] Sandbox provider registered in TrueForge, pointed at Colima
+- [ ] TrueForge agent definition that calls `customs inspect` and stops at an approval gate
 - [ ] GitHub MCP connector (read pull request diff, post findings)
 - [ ] The Customs agent definition
 - [ ] A test pull request that adds a dependency, to run against
