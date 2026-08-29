@@ -21,22 +21,56 @@ dashboard generated from real inspections.
 ("agent runs on TrueForge, with the harness visibly doing the work") and the demo video
 depends on it.
 
-### Rate limits — measured, and less severe than first thought
+### THE ONE BLOCKER — the free tier cannot run this agent
 
-The free tier reports **`limit: 20`** for `gemini-3.6-flash` with a short backoff window
-(retry-after is typically 20-40s). An early reading of `limit: 5` came from a different
-quota bucket. `gemini-3.1-pro-preview` is genuinely unavailable (`limit: 0`).
+This was misdiagnosed twice before being pinned down. The settled finding:
 
-The agent loop needs roughly 6 requests, so 20/min should fit **as long as you are not
-firing test calls back to back**. If a run 429s, wait ~60s and retry before concluding
-anything is broken. If it turns out to be too tight, a paid provider removes the issue:
+**It is a token-rate limit, not a request-rate limit.**
+
+| Agent | First-request context | Result |
+| --- | --- | --- |
+| bare agent, no sandbox, no MCP | ~1,100 tokens | works, repeatedly |
+| `customs` (sandbox + GitHub MCP) | **~50,000 tokens** | HTTP 429 instantly, even on "Say OK" |
+
+The proof it is not exhausted quota: a bare `scripts/verify-trueforge.sh` call succeeds
+*immediately after* a `customs` call fails. Same key, same minute. The agent's first request
+is ~45x larger and blows the free tier's per-minute token allowance before doing any work.
+
+Already tried and **not sufficient** — do not spend time re-trying these:
+
+- `generative_ui: {enabled: false}`
+- `dynamic_sub_agents: {enabled: false}`
+- `ask_user_questions: {enabled: false}`
+- `sandbox.file_downloads: false`
+- `enable_tools` narrowed to 3 GitHub tools, `preload_tools` set
+
+Still 429s. The sandbox tooling plus any MCP connector puts the floor above what the free
+tier allows per minute.
+
+**The fix — a paid provider. One command:**
 
 ```bash
-bash scripts/set-model-provider.sh anthropic     # prompts for key, hidden input
+bash scripts/set-model-provider.sh anthropic
 ```
 
-Then set `agent/customs.agent.json` → `"model": {"name": "anthropic/claude-sonnet-5"}` and
-re-register (see below).
+Then point the agent at it and re-register:
+
+```bash
+python3 - <<'EOF'
+import json
+p="agent/customs.agent.json"; d=json.load(open(p))
+d["manifest"]["model"]={"name":"anthropic/claude-sonnet-5"}
+json.dump(d,open(p,"w"),indent=2)
+EOF
+AGENT_ID=$(curl -s http://localhost:8790/api/v1/agents | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"][0]["id"])')
+python3 -c 'import json;print(json.dumps({"manifest":json.load(open("agent/customs.agent.json"))["manifest"]}))'   | curl -s -X PUT "http://localhost:8790/api/v1/agents/$AGENT_ID"       -H 'content-type: application/json' --data-binary @- >/dev/null
+```
+
+Note the update endpoint takes **only** `{"manifest": {...}}` — including `name` returns
+`Unrecognized key: "name"`.
+
+Everything else is built and verified. This is the last thing standing between the project
+and a complete submission.
 
 ### Run the agent
 
@@ -171,12 +205,11 @@ State lives in `~/Library/Application Support/trueforge/db/db.sqlite`.
 
 | Model | Free tier limit |
 | --- | --- |
-| `gemini-3.6-flash` | **`limit: 20`**, short window, retry-after ~20-40s |
+| `gemini-3.6-flash` | usable for bare calls; **cannot carry an agent with a sandbox + MCP** |
 | `gemini-3.1-pro-preview` | **`limit: 0` — unavailable entirely** |
 
-An agent loop spends one request per tool call and needs roughly 6, so 20/min should fit —
-provided you are not also firing test calls back to back. A 429 is not a failure: wait ~60s
-and retry. Keep `iteration_limit` low and batch shell work into one command per tool call.
+The binding constraint is tokens per minute, not requests per minute. See "THE ONE BLOCKER"
+at the top. Gemini is fine for `scripts/verify-trueforge.sh`; it is not fine for the agent.
 
 Register or rotate any provider with:
 
