@@ -42,6 +42,13 @@ c=out.get("content")
 if isinstance(c,list):
     c=" ".join(p.get("text","") for p in c if isinstance(p,dict))
 m=st.get("metrics") or {}
+expected="TRUEFORGE OK"
+norm=" ".join((c or "").split()).strip().rstrip(".")
+if expected not in norm:
+    print("\n  RESULT: FAILED - turn completed but the model did not return the proof string")
+    print("  expected to contain:", expected)
+    print("  actually said:", repr(c))
+    sys.exit(1)
 print("\n  RESULT: OK")
 print("  model said:", c)
 print("  tokens: in=%s out=%s total=%s"%(m.get("total_input_tokens"),

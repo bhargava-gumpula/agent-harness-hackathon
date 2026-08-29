@@ -156,10 +156,12 @@ Verified: `/Users` does not exist inside the VM or inside a container, and none 
 Reproduce the two canary proofs:
 
 ```bash
-CANARY="CANARY-$(uuidgen | tr -d '-' | head -c 24)"
-docker run --rm -i -e CANARY="$CANARY" node:22-alpine sh -s < scripts/canary-core.sh
-docker run --rm -i -e CANARY="$CANARY" node:22-alpine sh -s < scripts/positive-control.sh
+bash scripts/prove.sh
 ```
+
+It asserts both directions and **exits non-zero** if either fails. Every `customs inspect`
+call mints its own fresh marker internally, so no canary is ever reused between detonations
+— reuse would let one run's marker contaminate another's verdict.
 
 ---
 
