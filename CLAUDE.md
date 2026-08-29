@@ -5,45 +5,53 @@ conversation) can pick up without re-deriving decisions that were already made a
 
 ---
 
-## ▶ RESUME HERE — state as of 29 Aug 2026, 14:30 PT
+## ▶ RESUME HERE — state as of 29 Aug 2026, 13:45 PT
 
 **Deadline: Sunday 30 August 2026, 12:00 PM Pacific.**
 
-### The one thing blocking everything
+Pull request #2 is **merged**. `main` has everything — just `git pull` and work on `main`.
 
-`google-gemini/gemini-3-6-flash` is capped at **5 requests per minute** on the free tier.
-The agent's minimum loop is ~6 requests (read diff → inspect 2 packages → report → propose
-comment), so **the end-to-end agent run fails with HTTP 429 every time**. Everything else is
-built and verified.
+### Where it stands
 
-**Unblock it:**
+Built, merged and verified: the detector, the positive control, the agent definition with a
+real approval gate, the GitHub connector, a stranger-followable README, and a results
+dashboard generated from real inspections.
+
+**Not yet done: a full end-to-end agent run.** That is the single most important graded item
+("agent runs on TrueForge, with the harness visibly doing the work") and the demo video
+depends on it.
+
+### Rate limits — measured, and less severe than first thought
+
+The free tier reports **`limit: 20`** for `gemini-3.6-flash` with a short backoff window
+(retry-after is typically 20-40s). An early reading of `limit: 5` came from a different
+quota bucket. `gemini-3.1-pro-preview` is genuinely unavailable (`limit: 0`).
+
+The agent loop needs roughly 6 requests, so 20/min should fit **as long as you are not
+firing test calls back to back**. If a run 429s, wait ~60s and retry before concluding
+anything is broken. If it turns out to be too tight, a paid provider removes the issue:
 
 ```bash
 bash scripts/set-model-provider.sh anthropic     # prompts for key, hidden input
 ```
 
-Then edit `agent/customs.agent.json` → `"model": {"name": "anthropic/claude-sonnet-5"}`,
-re-register the agent, and run it:
+Then set `agent/customs.agent.json` → `"model": {"name": "anthropic/claude-sonnet-5"}` and
+re-register (see below).
+
+### Run the agent
 
 ```bash
-curl -X PUT http://localhost:8790/api/v1/agents/<agent_id> \
+bash scripts/run-customs.sh 3      # pull request #3 is the demo target
+```
+
+Expect it to read the diff, inspect two packages, write a report, then **pause for approval**
+before posting. Re-register the agent after editing its definition:
+
+```bash
+AGENT_ID=$(curl -s http://localhost:8790/api/v1/agents | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"][0]["id"])')
+curl -X PUT "http://localhost:8790/api/v1/agents/$AGENT_ID" \
   -H 'content-type: application/json' --data-binary @agent/customs.agent.json
-bash scripts/run-customs.sh 3
 ```
-
-Get the agent id from `curl -s http://localhost:8790/api/v1/agents`.
-
-### FIRST: make sure you are on the branch with the work
-
-As of this writing **`main` is still the empty scaffold** — all the work is on
-`feat/customs-scaffold` (pull request #2, not yet merged). If the repository root looks
-almost empty, you are on `main`:
-
-```bash
-git fetch origin && git checkout feat/customs-scaffold
-```
-
-Merging pull request #2 makes this unnecessary and is the cleaner fix.
 
 ### Restore the environment on any machine
 
@@ -51,7 +59,7 @@ Merging pull request #2 makes this unnecessary and is the cleaner fix.
 brew install colima docker
 colima start --cpu 2 --memory 4 --disk 20 --mount none   # --mount none is load-bearing
 npx @truefoundry/trueforge                                # http://localhost:8790
-bash scripts/set-model-provider.sh anthropic
+bash scripts/set-model-provider.sh anthropic              # or google-gemini
 bash scripts/add-github-connector.sh
 curl -X POST http://localhost:8790/api/v1/agents \
   -H 'content-type: application/json' --data-binary @agent/customs.agent.json
@@ -65,15 +73,11 @@ bash scripts/prove.sh              # detector fires on theft, quiet otherwise; e
 bash scripts/build-dashboard.sh    # real inspections -> web/dashboard.html
 ```
 
-### Open pull requests
+### Pull requests
 
-- **#2** `feat/customs-scaffold` — all the work. Qodo reviewed; findings addressed. **Needs merging.**
-- **#3** `demo/add-dependencies` — the target the agent inspects. Leave open; it is the demo.
+- **#2** — merged. Qodo reviewed it; findings addressed. This is the Qodo evidence link.
+- **#3** `demo/add-dependencies` — **leave open**. It is what the agent inspects in the demo.
 
-`main` requires a review to merge, but `enforce_admins` is off, so the repo owner can merge
-directly if Qodo stalls near the deadline.
-
----
 ---
 
 ## What this is
@@ -167,18 +171,12 @@ State lives in `~/Library/Application Support/trueforge/db/db.sqlite`.
 
 | Model | Free tier limit |
 | --- | --- |
-| `gemini-3.6-flash` | **5 requests per minute** |
-| `gemini-3.1-pro-preview` | **limit: 0 — unavailable entirely** |
+| `gemini-3.6-flash` | **`limit: 20`**, short window, retry-after ~20-40s |
+| `gemini-3.1-pro-preview` | **`limit: 0` — unavailable entirely** |
 
-An agent loop spends one request per tool call, so 5/min will stall a long Customs run
-mid-flight. Mitigations while on the free tier:
-
-- keep `iteration_limit` low and the tool loop short
-- batch shell work into **one** command per tool call rather than several
-- expect 429s during development; they are per-minute and clear in ~2 seconds
-
-Most remaining build work (agent definition, skill file, canary tooling, MCP config) needs
-no model calls at all, so the cap mainly slows end-to-end testing.
+An agent loop spends one request per tool call and needs roughly 6, so 20/min should fit —
+provided you are not also firing test calls back to back. A 429 is not a failure: wait ~60s
+and retry. Keep `iteration_limit` low and batch shell work into one command per tool call.
 
 Register or rotate any provider with:
 
@@ -311,16 +309,8 @@ syscall tracing to close that gap. Do not overclaim.
 
 ## What is left
 
-- [ ] **Run the agent end to end** — blocked only on a non-rate-limited model key
-- [ ] Merge pull request #2
+- [ ] **Run the agent end to end** and capture it pausing at the approval gate
 - [ ] Demo video, ~3 minutes, recorded not live (a live `npm install` can fail on camera)
-- [ ] Submission form
-- [ ] GitHub MCP connector (read pull request diff, post findings)
-- [ ] The Customs agent definition
-- [ ] A test pull request that adds a dependency, to run against
-- [ ] README rewritten for a stranger
-- [ ] Demo video (~3 min, recorded not live — a live `npm install` can fail on stage)
-- [ ] Qodo Code Review Evidence section with a merged pull request
 - [ ] Submission form
 
 ### Demo structure (three frames, in this order)
@@ -341,8 +331,9 @@ eventually, which executes it anyway, and the flag breaks a large fraction of np
 
 ## Working agreements
 
-- `main` is branch-protected and requires a pull request review. Qodo reviews every PR.
-  (`enforce_admins` is off, so a manual merge is possible in an emergency — last resort only.)
+- `main` is branch-protected and requires a pull request review; Qodo reviews every PR.
+  GitHub does not let an author approve their own pull request, so a solo merge needs
+  `gh pr merge <n> --merge --admin`. That is how #2 was merged.
 - Never commit the Gemini key, any `.env`, or personal data (hackathon rule 7).
 - Test the full flow after each phase; do not auto-advance to the next phase without
   explicit permission.
