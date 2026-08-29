@@ -86,9 +86,25 @@ Copilot now auto-install dependencies without verification.
 Running via `npx @truefoundry/trueforge` on **http://localhost:8790**.
 State lives in `~/Library/Application Support/trueforge/db/db.sqlite`.
 
-- Model provider: **google-gemini**, models `gemini-3-1-pro-preview` and `gemini-3-6-flash`
-- Default for this project: **`google-gemini/gemini-3-6-flash`** (tool-calling loop, not a
-  reasoning-heavy task — flash is faster and cheaper)
+- Model provider: **anthropic** (primary). A `google-gemini` provider is also registered
+  but is **not usable** — see the quota note below.
+- Default for this project: **`anthropic/claude-sonnet-5`**
+
+### Gemini free tier is unusable for this — measured, not guessed
+
+| Model | Free tier limit |
+| --- | --- |
+| `gemini-3.6-flash` | **5 requests per minute** |
+| `gemini-3.1-pro-preview` | **limit: 0 — unavailable entirely** |
+
+An agent loop spends one request per tool call, so 5/min stalls a Customs run repeatedly
+mid-flight. Anthropic is used instead. Do not "simplify" back to the Gemini free tier.
+
+Register or rotate any provider with:
+
+```bash
+bash scripts/set-model-provider.sh anthropic
+```
 - **The API key lives only in TrueForge's local database. It is NOT in this repo and must
   never be.**
 
