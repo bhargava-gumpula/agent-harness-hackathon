@@ -86,19 +86,28 @@ Copilot now auto-install dependencies without verification.
 Running via `npx @truefoundry/trueforge` on **http://localhost:8790**.
 State lives in `~/Library/Application Support/trueforge/db/db.sqlite`.
 
-- Model provider: **anthropic** (primary). A `google-gemini` provider is also registered
-  but is **not usable** — see the quota note below.
-- Default for this project: **`anthropic/claude-sonnet-5`**
+- Model provider: **google-gemini** (current), `gemini-3-6-flash`.
+- Default for this project: **`google-gemini/gemini-3-6-flash`**
+- **Planned:** switch to `anthropic/claude-sonnet-5` once a key is added. The setup script
+  is ready — `bash scripts/set-model-provider.sh anthropic` — and registering a new provider
+  adds alongside Gemini rather than replacing it.
 
-### Gemini free tier is unusable for this — measured, not guessed
+### Gemini free tier limits — measured, not guessed
 
 | Model | Free tier limit |
 | --- | --- |
 | `gemini-3.6-flash` | **5 requests per minute** |
 | `gemini-3.1-pro-preview` | **limit: 0 — unavailable entirely** |
 
-An agent loop spends one request per tool call, so 5/min stalls a Customs run repeatedly
-mid-flight. Anthropic is used instead. Do not "simplify" back to the Gemini free tier.
+An agent loop spends one request per tool call, so 5/min will stall a long Customs run
+mid-flight. Mitigations while on the free tier:
+
+- keep `iteration_limit` low and the tool loop short
+- batch shell work into **one** command per tool call rather than several
+- expect 429s during development; they are per-minute and clear in ~2 seconds
+
+Most remaining build work (agent definition, skill file, canary tooling, MCP config) needs
+no model calls at all, so the cap mainly slows end-to-end testing.
 
 Register or rotate any provider with:
 
