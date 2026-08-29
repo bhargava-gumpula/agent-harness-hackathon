@@ -34,3 +34,8 @@ logs/
 .idea/
 .vscode/
 *.swp
+
+# customs sandbox scratch
+.customs/
+sandbox-runs/
+*.canary
