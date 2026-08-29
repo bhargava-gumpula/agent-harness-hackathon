@@ -1,0 +1,36 @@
+# deps
+node_modules/
+.pnp/
+.pnp.js
+
+# env & secrets  -- never commit API keys (hackathon rule 7)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# trueforge local state
+.trueforge/
+*.sqlite
+*.sqlite3
+*.db
+
+# build
+dist/
+build/
+.next/
+out/
+coverage/
+
+# logs
+*.log
+npm-debug.log*
+logs/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
