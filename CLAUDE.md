@@ -33,6 +33,18 @@ bash scripts/run-customs.sh 3
 
 Get the agent id from `curl -s http://localhost:8790/api/v1/agents`.
 
+### FIRST: make sure you are on the branch with the work
+
+As of this writing **`main` is still the empty scaffold** — all the work is on
+`feat/customs-scaffold` (pull request #2, not yet merged). If the repository root looks
+almost empty, you are on `main`:
+
+```bash
+git fetch origin && git checkout feat/customs-scaffold
+```
+
+Merging pull request #2 makes this unnecessary and is the cleaner fix.
+
 ### Restore the environment on any machine
 
 ```bash
