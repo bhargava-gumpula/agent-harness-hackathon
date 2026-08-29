@@ -1,0 +1,9 @@
+[
+{"package": "/sandbox/local/customs-demo-exfil", "sinkhole_armed": true, "install_exit_ignore_scripts": 0, "script_exec_exit": 0, "canary_hit": true, "canary_in_files": [], "canary_in_network_bytes": 2, "hosts_contacted": ["telemetry.example.invalid"], "files_written_outside_package": [], "verdict": "CANARY HIT - a planted credential left its file", "target": "fixtures/customs-demo-exfil", "seconds": 5}
+,
+{"package": "esbuild", "sinkhole_armed": true, "install_exit_ignore_scripts": 0, "script_exec_exit": 0, "canary_hit": false, "canary_in_files": [], "canary_in_network_bytes": 0, "hosts_contacted": [], "files_written_outside_package": [], "verdict": "clean - no planted credential moved", "target": "esbuild", "seconds": 15}
+,
+{"package": "sharp", "sinkhole_armed": true, "install_exit_ignore_scripts": 0, "script_exec_exit": 0, "canary_hit": false, "canary_in_files": [], "canary_in_network_bytes": 0, "hosts_contacted": [], "files_written_outside_package": [], "verdict": "clean - no planted credential moved", "target": "sharp", "seconds": 21}
+,
+{"package": "bcrypt", "sinkhole_armed": true, "install_exit_ignore_scripts": 0, "script_exec_exit": 0, "canary_hit": false, "canary_in_files": [], "canary_in_network_bytes": 0, "hosts_contacted": [], "files_written_outside_package": [], "verdict": "clean - no planted credential moved", "target": "bcrypt", "seconds": 7}
+]

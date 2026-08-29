@@ -1,0 +1,144 @@
+<title>Customs Inspection Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+  :root{
+    --ground:#F5F7F9;--surface:#FFFFFF;--surface-2:#EDF0F4;--ink:#161A21;--muted:#5E6877;
+    --line:#D8DEE6;--line-strong:#B6C0CD;--accent:#2C567F;--accent-soft:#E4EDF6;
+    --hit:#A32F27;--hit-soft:#F8E9E7;--clean:#256B52;--clean-soft:#E3F0EA;
+    --warn:#8A6100;--warn-soft:#FBF2E0;
+    --shadow:0 1px 2px rgba(22,26,33,.05),0 6px 20px -12px rgba(22,26,33,.18);
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --ground:#11141A;--surface:#191D25;--surface-2:#212731;--ink:#E7EBF1;--muted:#95A0B0;
+    --line:#2A313C;--line-strong:#3C4553;--accent:#7BA7D6;--accent-soft:#1C2A3A;
+    --hit:#E0796F;--hit-soft:#2E1E1C;--clean:#5CB490;--clean-soft:#16291F;
+    --warn:#D6A93F;--warn-soft:#2B2314;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px -12px rgba(0,0,0,.7);
+  }}
+  :root[data-theme="dark"]{
+    --ground:#11141A;--surface:#191D25;--surface-2:#212731;--ink:#E7EBF1;--muted:#95A0B0;
+    --line:#2A313C;--line-strong:#3C4553;--accent:#7BA7D6;--accent-soft:#1C2A3A;
+    --hit:#E0796F;--hit-soft:#2E1E1C;--clean:#5CB490;--clean-soft:#16291F;
+    --warn:#D6A93F;--warn-soft:#2B2314;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px -12px rgba(0,0,0,.7);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);
+    font-family:"Source Sans 3",ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.6;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:48px 24px 80px;display:flex;flex-direction:column;gap:34px}
+  h1,h2,.k,.badge,.eyebrow{font-family:Archivo,ui-sans-serif,system-ui,sans-serif}
+  h1{font-size:34px;letter-spacing:-.024em;margin:0;font-weight:700}
+  h2{font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+     margin:0 0 14px;font-weight:600}
+  .sub{color:var(--muted);margin:8px 0 0;max-width:62ch}
+  header{border-bottom:2px solid var(--ink);padding-bottom:22px}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;margin:0 0 10px}
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .cell{background:var(--surface);padding:16px 18px}
+  .k{font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .v{font-size:27px;font-weight:600;letter-spacing:-.02em;margin-top:4px;
+     font-variant-numeric:tabular-nums;font-family:Archivo,sans-serif}
+  .v.hit{color:var(--hit)} .v.clean{color:var(--clean)}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+    box-shadow:var(--shadow);overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-family:Archivo,sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+     color:var(--muted);font-weight:600;background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:none}
+  td:first-child{width:34px;padding-right:0}
+  .pkg{font-family:"IBM Plex Mono",monospace;font-size:13px;white-space:nowrap}
+  .detail{color:var(--muted);font-size:14px;line-height:1.45}
+  .num{font-variant-numeric:tabular-nums;color:var(--muted);text-align:right;font-size:13.5px}
+  .tick{display:block;width:9px;height:9px;border-radius:50%;margin-left:4px}
+  .t-hit{background:var(--hit)} .t-clean{background:var(--clean)} .t-err{background:var(--warn)}
+  .r-hit{background:var(--hit-soft)}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.09em;
+    padding:3px 9px;border-radius:20px;white-space:nowrap;text-transform:uppercase}
+  .b-hit{background:var(--hit);color:var(--surface)}
+  .b-clean{background:var(--clean-soft);color:var(--clean);border:1px solid var(--clean)}
+  .b-err{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+  .note{border-left:3px solid var(--accent);background:var(--accent-soft);
+    border-radius:0 8px 8px 0;padding:16px 20px;font-size:15px}
+  footer{border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:13px}
+  code{font-family:"IBM Plex Mono",monospace;font-size:.88em;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  @media(max-width:620px){.wrap{padding:32px 16px 60px}h1{font-size:27px}.detail{display:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Inspection log</p>
+    <h1>Customs</h1>
+    <p class="sub">Every row below is a real detonation: the package was installed with its
+    scripts enabled inside a disposable container seeded with decoy credentials, and the
+    decoys were then swept for. Nothing here is mock data.</p>
+  </header>
+
+  <section>
+    <div class="strip">
+      <div class="cell"><div class="k">Inspected</div><div class="v">4</div></div>
+      <div class="cell"><div class="k">Canary hits</div><div class="v hit">1</div></div>
+      <div class="cell"><div class="k">Clean</div><div class="v clean">3</div></div>
+      <div class="cell"><div class="k">Total time</div><div class="v">48s</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Results</h2>
+    <div class="panel">
+      <table>
+        <thead><tr><th></th><th>Package</th><th>Verdict</th><th>Evidence</th><th class="num">Time</th></tr></thead>
+        <tbody>
+      <tr class="r-hit">
+        <td><span class="tick t-hit"></span></td>
+        <td class="pkg">fixtures/customs-demo-exfil</td>
+        <td><span class="badge b-hit">CANARY HIT</span></td>
+        <td class="detail">decoy found in 2 captured network payload(s); contacted telemetry.example.invalid</td>
+        <td class="num">5s</td>
+      </tr>
+      <tr class="r-clean">
+        <td><span class="tick t-clean"></span></td>
+        <td class="pkg">esbuild</td>
+        <td><span class="badge b-clean">clean</span></td>
+        <td class="detail">no decoy moved; nothing written outside the package</td>
+        <td class="num">15s</td>
+      </tr>
+      <tr class="r-clean">
+        <td><span class="tick t-clean"></span></td>
+        <td class="pkg">sharp</td>
+        <td><span class="badge b-clean">clean</span></td>
+        <td class="detail">no decoy moved; nothing written outside the package</td>
+        <td class="num">21s</td>
+      </tr>
+      <tr class="r-clean">
+        <td><span class="tick t-clean"></span></td>
+        <td class="pkg">bcrypt</td>
+        <td><span class="badge b-clean">clean</span></td>
+        <td class="detail">no decoy moved; nothing written outside the package</td>
+        <td class="num">7s</td>
+      </tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="note">
+      <strong>Reading a verdict.</strong> A canary hit means a decoy credential planted in the
+      container left its file — an observation, not a judgement. A clean result means no decoy
+      moved. Contacting a registry or a project's own CDN during install is normal and is not
+      suspicious on its own. The sinkhole records plaintext bodies and TLS hostnames; it does
+      not decrypt TLS, so an HTTPS payload shows its destination but not its contents.
+    </div>
+  </section>
+
+  <footer>
+    Generated 29 August 2026, 13:26 by <code>scripts/build-dashboard.sh</code> ·
+    Customs, built on TrueForge for the Agent Harness Hackathon
+  </footer>
+</div>
