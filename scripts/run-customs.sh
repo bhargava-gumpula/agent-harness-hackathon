@@ -30,16 +30,40 @@ done
 echo "status: $ST"
 
 echo; echo "==== what the agent did ===="
+# Each entry wraps the real event under "event", and the list arrives newest-first.
+# Tool calls live on model.message under tool_calls[].function, and tool_info says
+# whether a call went to an MCP server, the sandbox, or the harness itself.
 curl -s "$TF/api/v1/sessions/$SID/events" | python3 -c '
 import sys,json
-for e in (json.load(sys.stdin).get("data") or []):
-    t=e.get("type","")
-    if t=="tool.call":
-        print("  call:",e.get("name"),str(e.get("arguments"))[:150])
+d=json.load(sys.stdin).get("data") or []
+for e in reversed(d):
+    ev=e.get("event") or {}
+    t=ev.get("type","")
+    if t=="sandbox.created":
+        print("  [sandbox] created")
     elif t=="tool.approval_required":
-        print("  *** APPROVAL REQUIRED ***")
-        for tc in e.get("tool_calls",[]): print("      ",json.dumps(tc)[:300])
-    elif t in ("sandbox.created",): print("  sandbox created:",e.get("sandbox_id"))
+        print("  *** PAUSED FOR HUMAN APPROVAL ***")
+    elif t=="model.message":
+        for tc in ev.get("tool_calls") or []:
+            fn=tc.get("function") or {}
+            name=fn.get("name","")
+            info=tc.get("tool_info") or {}
+            kind=info.get("type","")
+            server=info.get("server_name","")
+            try: args=json.loads(fn.get("arguments") or "{}")
+            except Exception: args={}
+            if kind=="mcp":
+                print("  [mcp:"+str(server)+"] "+name+" "+json.dumps(args)[:120])
+            elif name=="exec":
+                print("  [sandbox] exec - "+str(args.get("intent",""))[:90])
+            elif name=="call_tool":
+                # Code Mode routes an MCP call through the sandbox. This is the call
+                # being MADE - whether it was held is the tool.approval_required event.
+                inp=args.get("input") or {}
+                detail=inp.get("package") or inp.get("pullNumber") or ""
+                print("  [mcp:"+str(args.get("mcp_server"))+"] "+str(args.get("tool_name"))+(" "+str(detail) if detail else "")+"  (via code mode)")
+            elif kind=="truefoundry-system":
+                print("  [harness] "+name)
 ' 2>/dev/null | head -40
 
 echo; echo "==== result ===="

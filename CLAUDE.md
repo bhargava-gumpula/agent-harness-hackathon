@@ -5,72 +5,101 @@ conversation) can pick up without re-deriving decisions that were already made a
 
 ---
 
-## ▶ RESUME HERE — state as of 29 Aug 2026, 13:45 PT
+## ▶ RESUME HERE — state as of 29 Aug 2026, 14:45 PT
 
-**Deadline: Sunday 30 August 2026, 12:00 PM Pacific.**
+**Deadline: Sunday 30 August 2026, 12:00 PM Pacific** (= 8 PM London, confirmed on the
+wemakedevs page). The Luma page shows an `18:00` "project submission deadline" — that is the
+**in-person SF day only**, not the online track. Online submission is Sunday noon PT.
 
-Pull request #2 is **merged**. `main` has everything — just `git pull` and work on `main`.
+**Submission form: https://forms.gle/7DWiH2SDCJioWtdeA**
 
-### Where it stands
+Pull requests #2 and #4 are **merged**.
 
-Built, merged and verified: the detector, the positive control, the agent definition with a
-real approval gate, the GitHub connector, a stranger-followable README, and a results
-dashboard generated from real inspections.
+### Where it stands — THE AGENT RUNS END TO END
 
-**Not yet done: a full end-to-end agent run.** That is the single most important graded item
-("agent runs on TrueForge, with the harness visibly doing the work") and the demo video
-depends on it.
+`bash scripts/run-customs.sh 3` now completes the full loop and stops at the approval gate.
+Verified trace from a real run:
 
-### THE ONE BLOCKER — the free tier cannot run this agent
-
-This was misdiagnosed twice before being pinned down. The settled finding:
-
-**It is a token-rate limit, not a request-rate limit.**
-
-| Agent | First-request context | Result |
-| --- | --- | --- |
-| bare agent, no sandbox, no MCP | ~1,100 tokens | works, repeatedly |
-| `customs` (sandbox + GitHub MCP) | **~50,000 tokens** | HTTP 429 instantly, even on "Say OK" |
-
-The proof it is not exhausted quota: a bare `scripts/verify-trueforge.sh` call succeeds
-*immediately after* a `customs` call fails. Same key, same minute. The agent's first request
-is ~45x larger and blows the free tier's per-minute token allowance before doing any work.
-
-Already tried and **not sufficient** — do not spend time re-trying these:
-
-- `generative_ui: {enabled: false}`
-- `dynamic_sub_agents: {enabled: false}`
-- `ask_user_questions: {enabled: false}`
-- `sandbox.file_downloads: false`
-- `enable_tools` narrowed to 3 GitHub tools, `preload_tools` set
-
-Still 429s. The sandbox tooling plus any MCP connector puts the floor above what the free
-tier allows per minute.
-
-**The fix — a paid provider. One command:**
-
-```bash
-bash scripts/set-model-provider.sh anthropic
+```
+[mcp:github]  pull_request_read          <- real tool through MCP
+[mcp:customs] customs_inspect esbuild     <- canary_hit false (clean)
+[mcp:customs] customs_inspect fixtures/customs-demo-exfil  <- canary_hit TRUE
+[sandbox]     exec - aggregate results into a computed markdown table
+[mcp:github]  add_issue_comment
+*** PAUSED FOR HUMAN APPROVAL ***
 ```
 
-Then point the agent at it and re-register:
+One run demonstrates both directions, because PR #3 adds `esbuild` **and** the local
+positive control. Cost about **$0.13 per run** on `anthropic/claude-sonnet-5`.
 
-```bash
-python3 - <<'EOF'
-import json
-p="agent/customs.agent.json"; d=json.load(open(p))
-d["manifest"]["model"]={"name":"anthropic/claude-sonnet-5"}
-json.dump(d,open(p,"w"),indent=2)
-EOF
-AGENT_ID=$(curl -s http://localhost:8790/api/v1/agents | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"][0]["id"])')
-python3 -c 'import json;print(json.dumps({"manifest":json.load(open("agent/customs.agent.json"))["manifest"]}))'   | curl -s -X PUT "http://localhost:8790/api/v1/agents/$AGENT_ID"       -H 'content-type: application/json' --data-binary @- >/dev/null
+### CORRECTION — the earlier Gemini diagnosis was wrong
+
+A previous session recorded "it is a token-rate limit, not a request-rate limit." **That is
+not what the API says.** The actual 429 body is:
+
+```
+Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20
 ```
 
-Note the update endpoint takes **only** `{"manifest": {...}}` — including `name` returns
-`Unrecognized key: "name"`.
+That is a **requests** metric. A minimal sandbox-only agent with no MCP — first request
+~1k tokens — also 429s at `tokens: 0`, four times, spaced 70s apart. A per-minute *token*
+ceiling cannot explain that; an exhausted request quota can. Do not repeat the token-rate
+claim on camera (hackathon rule 13: you must be able to explain every decision).
 
-Everything else is built and verified. This is the last thing standing between the project
-and a complete submission.
+Config knobs already tried and insufficient on the free tier — do not re-try:
+`generative_ui`, `dynamic_sub_agents`, `ask_user_questions`, `sandbox.file_downloads`,
+narrowed `enable_tools`/`preload_tools`.
+
+### The Anthropic key must be WORKSPACE-SCOPED
+
+An unscoped (identity-linked) key returns HTTP 400:
+
+```
+anthropic-workspace-id is required when authenticating with an identity-linked API key
+```
+
+TrueForge **cannot** send that header: `ModelProviderAuthSchema` is `.strict()` and accepts
+only `api_key`. There is no custom-header field. So the key itself must be scoped: in the
+Console, Create key → set **Workspace** to a specific workspace (Default is fine). Personal
+vs service account does not matter; scope does. Then `bash scripts/set-model-provider.sh
+anthropic` to rotate it in place.
+
+### CONFIRMED — the sandbox cannot run `customs.sh`, and no model provider fixes that
+
+This was the real blocker behind the missing E2E run, and it is *provider-independent*.
+TrueForge has no sandbox provider configured, so it falls back to `local` —
+`@anthropic-ai/sandbox-runtime`, a host process under a macOS seatbelt profile. Measured
+from inside that sandbox:
+
+| Check | Result |
+| --- | --- |
+| `ls` the repo | `Operation not permitted` |
+| `docker ps` | `permission denied` on the docker socket |
+| `curl registry.npmjs.org` | `000` (blocked) |
+| `curl api.github.com` | `200` (allowed) |
+| `pwd` | `~/Library/Application Support/trueforge/sandboxes/<id>/<id>` |
+
+The allow-read list is **hardcoded** in the shipped code (`ALLOW_READ_BY_PLATFORM`), the
+network allowlist is hardcoded to pypi + github, and `allowRead` is assembled as
+`[sandboxRootPath, codeModeSocketParent, ...platformAllowRead]` with **no config hook**.
+Copying `customs.sh` into the sandbox root would not help — it still needs the Docker socket
+and the npm registry, both outside the policy.
+
+**The fix, now built: `customs/mcp-server.js`.** A zero-dependency local HTTP MCP server that
+exposes one tool, `customs_inspect(package)`, and shells out to `customs.sh` **on the host**,
+where Docker and npm work. TrueForge's MCP schema is `type: z.enum(["remote"])` + `url`, so a
+localhost URL is how a local tool gets in — stdio servers are not supported.
+
+Start it before any agent run (nothing else depends on it):
+
+```bash
+node customs/mcp-server.js          # http://127.0.0.1:8791/mcp
+curl -s http://127.0.0.1:8791/health
+```
+
+This made the submission **stronger**, not weaker: two real MCP servers instead of one, and
+the sandbox now does genuine work (aggregating the JSON into the report table) rather than
+being the thing that was broken.
 
 ### Run the agent
 
@@ -79,12 +108,19 @@ bash scripts/run-customs.sh 3      # pull request #3 is the demo target
 ```
 
 Expect it to read the diff, inspect two packages, write a report, then **pause for approval**
-before posting. Re-register the agent after editing its definition:
+before posting. Start `customs/mcp-server.js` first or the inspections have no tool to call.
+
+Re-register the agent after editing its definition. Select the agent **by name** — an earlier
+version of this snippet used `data[0]`, which silently overwrites the wrong agent the moment a
+second one is registered. The endpoint takes **only** `{"manifest": {...}}`; including `name`
+returns `Unrecognized key: "name"`.
 
 ```bash
-AGENT_ID=$(curl -s http://localhost:8790/api/v1/agents | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"][0]["id"])')
-curl -X PUT "http://localhost:8790/api/v1/agents/$AGENT_ID" \
-  -H 'content-type: application/json' --data-binary @agent/customs.agent.json
+AGENT_ID=$(curl -s http://localhost:8790/api/v1/agents \
+  | python3 -c 'import sys,json;print([a for a in json.load(sys.stdin)["data"] if a["name"]=="customs"][0]["id"])')
+python3 -c 'import json;print(json.dumps({"manifest":json.load(open("agent/customs.agent.json"))["manifest"]}))' \
+  | curl -s -X PUT "http://localhost:8790/api/v1/agents/$AGENT_ID" \
+      -H 'content-type: application/json' --data-binary @-
 ```
 
 ### Restore the environment on any machine
@@ -283,6 +319,22 @@ call mints its own fresh marker internally, so no canary is ever reused between 
    diff as secondary or filter `~/.npm/_cacache` aggressively.
 6. **Never detonate packages outside the container.** A fake `$HOME` in a temp directory is
    not containment — absolute paths defeat it.
+7. **Session events are nested and newest-first.** Each entry is `{turn_id, event}` — the real
+   payload is under `event`, not at the top level. Reading `e["type"]` yields `None` for every
+   entry and prints an empty trace, which is what made an early run look like it did nothing.
+   Tool calls live on `model.message` at `tool_calls[].function`, with `tool_info.type`
+   distinguishing `mcp` / `truefoundry-system`.
+8. **`call_tool` is Code Mode, not an approval hold.** TrueForge routes MCP calls through the
+   sandbox as `call_tool`. Do not label those "held for approval" in demo output — the only
+   real hold is a `tool.approval_required` event. Mislabelling it overstates the safety story
+   on the exact item being graded.
+9. **"Offer to post" makes the model ask in prose instead of calling the tool**, so the harness
+   gate never fires and there is nothing to film. The instruction must say to CALL
+   `add_issue_comment` directly, because the held call *is* how the human gets asked.
+10. **An unannotated MCP tool defaults to `destructiveHint: true`**, so TrueForge auto-assigns
+    `require_approval_for_tools: ["@write","@destructive"]` and gates every inspection.
+    `customs_inspect` declares `annotations.destructiveHint: false` and the agent pins
+    `require_approval_for_tools: []`, leaving exactly one gate on the irreversible action.
 
 ---
 
